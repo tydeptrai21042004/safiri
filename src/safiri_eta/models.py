@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 from typing import Any
 
 import joblib
@@ -277,6 +278,12 @@ def train_models(config: dict[str, Any]) -> Path:
 
 
 def load_bundle(path: str | Path) -> dict[str, Any]:
+    # Compatibility for the bundled scikit-learn 1.7.2 model.
+    # The serialized HistGradientBoosting loss object references the
+    # historical top-level module name ``_loss``.
+    import sklearn._loss as sklearn_loss
+
+    sys.modules.setdefault("_loss", sklearn_loss)
     return joblib.load(Path(path))
 
 
