@@ -7,6 +7,7 @@ from typing import Any
 
 import joblib
 import numpy as np
+import sklearn
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
@@ -262,6 +263,7 @@ def train_models(config: dict[str, Any]) -> Path:
 
     bundle = {
         "version": "1.0.0",
+        "sklearn_version": sklearn.__version__,
         "baseline": baseline,
         "stage_eta": stage_eta,
         "direct_eta": direct_eta,
@@ -278,9 +280,8 @@ def train_models(config: dict[str, Any]) -> Path:
 
 
 def load_bundle(path: str | Path) -> dict[str, Any]:
-    # Compatibility for the bundled scikit-learn 1.7.2 model.
-    # The serialized HistGradientBoosting loss object references the
-    # historical top-level module name ``_loss``.
+    # Older HistGradientBoosting pickles may reference sklearn's compiled
+    # loss extension by its historical top-level name.
     import sklearn._loss as sklearn_loss
 
     sys.modules.setdefault("_loss", sklearn_loss)
@@ -288,5 +289,27 @@ def load_bundle(path: str | Path) -> dict[str, Any]:
 
 
 def load_default_bundle(config: dict[str, Any]) -> dict[str, Any]:
-    return load_bundle(project_path(config, "artifacts_dir") / "model_bundle.joblib")
+    bundle_path = project_path(config, "artifacts_dir") / "model_bundle.joblib"
+    try:
+        bundle = load_bundle(bundle_path)
+        if bundle.get("sklearn_version") != sklearn.__version__:
+            raise ValueError(
+                "Model was created by a different or unknown scikit-learn version"
+            )
+        return bundle
+    except Exception as load_error:
+        # Pickled scikit-learn estimators are not guaranteed to load across
+        # versions. Rebuild from the repository's processed CSV files using
+        # the environment currently running the application.
+        try:
+            train_models(config)
+            bundle = load_bundle(bundle_path)
+            if bundle.get("sklearn_version") != sklearn.__version__:
+                raise RuntimeError("Rebuilt model version marker is invalid")
+            return bundle
+        except Exception as rebuild_error:
+            raise RuntimeError(
+                "The saved model is incompatible and automatic retraining failed. "
+                f"Original load error: {type(load_error).__name__}: {load_error}"
+            ) from rebuild_error
 
