@@ -1,0 +1,15 @@
+{
+  "dataset_type": "synthetic",
+  "seed": 42,
+  "shipments": 300,
+  "ground_truth_events": 2400,
+  "raw_observed_events": 2347,
+  "routes": 6,
+  "delayed_rate": 0.20666666666666667,
+  "assumptions": [
+    "All timestamps are UTC.",
+    "BOOKED and DELIVERED are always observed.",
+    "Intermediate milestones may be missing or reported late.",
+    "Synthetic data is not presented as real SAFiRi operational data."
+  ]
+}

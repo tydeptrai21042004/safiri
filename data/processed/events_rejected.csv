@@ -1,0 +1,1 @@
+source_event_id,shipment_id,source_status,location_code,planned_time,actual_time,observed_at,source,source_reliability,congestion_level,weather_severity,documents_ready,event_type,rejection_reason

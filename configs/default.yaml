@@ -1,0 +1,33 @@
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  artifacts_dir: artifacts
+  reports_dir: reports
+
+simulation:
+  seed: 42
+  n_shipments: 300
+  start_date: "2025-01-01"
+  missing_event_probability: 0.08
+  late_event_probability: 0.12
+  duplicate_event_probability: 0.04
+
+split:
+  train_fraction: 0.70
+  validation_fraction: 0.15
+
+model:
+  random_state: 42
+  delay_threshold_hours: 12.0
+  max_iter: 180
+  learning_rate: 0.06
+  max_leaf_nodes: 23
+  min_samples_leaf: 18
+  l2_regularization: 0.4
+  calibration_bins: 8
+
+serving:
+  host: "0.0.0.0"
+  api_port: 8000
+  dashboard_port: 8501
+

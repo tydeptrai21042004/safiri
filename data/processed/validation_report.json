@@ -1,0 +1,9 @@
+{
+  "raw_records": 2347,
+  "valid_records_before_deduplication": 2347,
+  "canonical_records": 2248,
+  "rejected_records": 0,
+  "duplicates_removed": 99,
+  "late_report_rate": 0.17704626334519574,
+  "out_of_order_reports": 250
+}

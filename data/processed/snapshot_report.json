@@ -1,0 +1,16 @@
+{
+  "snapshots": 1873,
+  "stage_training_rows": 7451,
+  "shipments_by_split": {
+    "train": 210,
+    "validation": 45,
+    "test": 45
+  },
+  "snapshots_by_split": {
+    "train": 1326,
+    "test": 275,
+    "validation": 272
+  },
+  "future_snapshot_violations": 0,
+  "shipment_split_overlap": false
+}
