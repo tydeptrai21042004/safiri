@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import sys
 from typing import Any
+import json
+import os
+import sys
+
+# Keep numerical libraries within Streamlit Community Cloud resource limits.
+for variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(variable, "1")
 
 import joblib
 import numpy as np
@@ -264,6 +270,7 @@ def train_models(config: dict[str, Any]) -> Path:
     bundle = {
         "version": "1.0.0",
         "sklearn_version": sklearn.__version__,
+        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
         "baseline": baseline,
         "stage_eta": stage_eta,
         "direct_eta": direct_eta,
@@ -275,41 +282,68 @@ def train_models(config: dict[str, Any]) -> Path:
         "milestones": MILESTONES,
     }
     output = artifacts_dir / "model_bundle.joblib"
-    joblib.dump(bundle, output)
+    temporary = output.with_suffix(".joblib.tmp")
+    joblib.dump(bundle, temporary)
+    temporary.replace(output)
+    metadata = {
+        "sklearn_version": sklearn.__version__,
+        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
+    }
+    output.with_suffix(".meta.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
     return output
 
 
 def load_bundle(path: str | Path) -> dict[str, Any]:
-    # Older HistGradientBoosting pickles may reference sklearn's compiled
-    # loss extension by its historical top-level name.
-    import sklearn._loss as sklearn_loss
-
-    sys.modules.setdefault("_loss", sklearn_loss)
     return joblib.load(Path(path))
 
 
 def load_default_bundle(config: dict[str, Any]) -> dict[str, Any]:
     bundle_path = project_path(config, "artifacts_dir") / "model_bundle.joblib"
+    metadata_path = bundle_path.with_suffix(".meta.json")
+    expected = {
+        "sklearn_version": sklearn.__version__,
+        "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
+    }
+
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        metadata = {}
+
+    # Avoid opening a pickle produced by a different Python/scikit-learn
+    # runtime. Rebuild first from the CSV files committed with the project.
+    if metadata != expected or not bundle_path.exists():
+        train_models(config)
+
     try:
         bundle = load_bundle(bundle_path)
-        if bundle.get("sklearn_version") != sklearn.__version__:
-            raise ValueError(
-                "Model was created by a different or unknown scikit-learn version"
-            )
+        actual = {
+            "sklearn_version": bundle.get("sklearn_version"),
+            "python_version": bundle.get("python_version"),
+        }
+        if actual != expected:
+            raise ValueError(f"Model runtime mismatch: expected {expected}, found {actual}")
         return bundle
     except Exception as load_error:
-        # Pickled scikit-learn estimators are not guaranteed to load across
-        # versions. Rebuild from the repository's processed CSV files using
-        # the environment currently running the application.
+        # Recover from a corrupt or otherwise incompatible artifact by
+        # rebuilding it atomically with the current deployment runtime.
+        bundle_path.unlink(missing_ok=True)
+        metadata_path.unlink(missing_ok=True)
         try:
             train_models(config)
             bundle = load_bundle(bundle_path)
-            if bundle.get("sklearn_version") != sklearn.__version__:
-                raise RuntimeError("Rebuilt model version marker is invalid")
+            actual = {
+                "sklearn_version": bundle.get("sklearn_version"),
+                "python_version": bundle.get("python_version"),
+            }
+            if actual != expected:
+                raise RuntimeError(f"Rebuilt model runtime mismatch: {actual}")
             return bundle
         except Exception as rebuild_error:
             raise RuntimeError(
-                "The saved model is incompatible and automatic retraining failed. "
+                "The saved model was incompatible and automatic retraining failed. "
                 f"Original load error: {type(load_error).__name__}: {load_error}"
             ) from rebuild_error
 
